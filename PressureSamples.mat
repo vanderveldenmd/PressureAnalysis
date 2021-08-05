@@ -1,0 +1,108 @@
+classdef PressureSamples
+    %PressureSamples Class to read and transform pressure sample data
+    
+    properties
+        Nx % number of samples in x-direction
+        Ny % number of samples in y-direction
+        Nf % number of sample frames
+        P  % 3d pressure array P(x,y,frame)
+        x  % x-coordinates of sample grid
+        y  % y-coordinates of sample grid
+    end
+    
+    methods
+        function self = PressureSamples(fileName)
+            %PressureSamples Constructor method which reads data from a
+            %file
+            
+            data = xlsread(fileName);
+            % mask vector maps to rows; is true when row is not data
+            mask = isnan(data(:,1));
+            % construct ranges matrix to identify ranges in data
+            % which contain measurement grids
+            ranges = [1 0];
+            k = 1;
+            for i=1:length(mask)-1
+                if mask(i)==0 && mask(i+1)==1
+                    ranges(k,2) = i;
+                end
+                if mask(i)==1 && mask(i+1)==0
+                   k = k+1;
+                   ranges(k,1) = i+1;
+                end
+            end
+            ranges(k,2) = length(mask);
+            
+            % define sizes of grids
+            Nx = ranges(1,2)-ranges(1,1)+1;
+            Ny = Nx;
+            Nf = size(ranges,1)-2;
+            % allocate space to store data in 3d array
+            P = zeros(Nx,Ny,Nf);
+
+            % loop over frames and store each in array
+            for k=1:Nf
+                i1 = ranges(k,1);
+                i2 = ranges(k,2);
+                P(:,:,k) = 6894.75729*data(i1:i2,1:Ny); % psi -> Pa
+            end
+            
+            % set object properties
+            self.Nx = Nx;
+            self.Ny = Ny;
+            self.Nf = Nf;
+            self.P = P;
+            self.x = linspace(0,0.5,Nx);
+            self.y = linspace(0,0.5,Ny);
+        end
+        
+        function [xc,yc,P,uP] = computeCentroid(self)
+            % average pressure frames
+            P = mean(self.P,3);
+            % compute pressure uncertainty
+            t = tinv([0.025  0.975],size(self.P,3)-1);
+            uP = t(2)*std(self.P,0,3)/sqrt(size(self.P,3));
+            % create 2d mesh
+            [Y,X] = meshgrid(self.x,self.y);
+            
+            % calculate guess centroid
+            xc = sum(sum(sum(X.*P)))/sum(sum(sum(P)));
+            yc = sum(sum(sum(Y.*P)))/sum(sum(sum(P)));
+            
+            % compute radial moment relative to guess centroid
+            R = sqrt((X-xc).^2+(Y-yc).^2);
+            rc = sum(sum(sum(R.*P)))/sum(sum(sum(P)));
+            % remove data outside a range from centroid
+            P(R>2.5*rc) = 0.0;
+            
+            % recompute centroid after filtering distal pressures
+            xc = sum(sum(sum(X.*P)))/sum(sum(sum(P)));
+            yc = sum(sum(sum(Y.*P)))/sum(sum(sum(P)));
+        end
+        
+        function [x,y,P,uP] = resampleData(self)
+            % specify sampling resolution
+            N = 1000;
+            % specify sampling space size
+            L = 0.7;
+            % create sampling grid
+            x = linspace(-L/2,L/2,N);
+            y = linspace(-L/2,L/2,N);
+            
+            % compute average and uncertain presures
+            [xc,yc,Pl,uPl] = self.computeCentroid();
+            % adjust centroid to origin
+            xl = self.x-xc;
+            yl = self.y-yc;
+            
+            % create sampling grids
+            [X,Y] = meshgrid(x,y);
+            [Xl,Yl] = meshgrid(xl,yl);
+            
+            % resample pressure and uncertainty
+            P = interp2(Xl,Yl,Pl',X,Y,'bilinear',0.0)';
+            uP = interp2(Xl,Yl,uPl',X,Y,'bilinear',0.0)';
+        end
+    end
+end
+

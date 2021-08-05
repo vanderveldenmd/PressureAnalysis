@@ -1,0 +1,44 @@
+% clean up workspace
+clear;
+clc;
+close all;
+
+fileList = dir('Data');
+count = 0;
+for k=5:length(fileList)
+    fileStruct = fileList(k);
+    name = fileStruct.name;
+    folder = fileStruct.folder;
+    split1 = split(name,'_');
+    type = split1{1};
+    split2 = split(split1{2},'.');
+    number = split2{1};
+    disp(type);
+    disp(number);
+    
+    if type=='y'
+        continue
+    end
+    
+    S = PressureSamples(strcat(folder,'\',name));
+    [x,y,P,uP] = S.resampleData();
+    
+    count = count+1;
+    if exist('mP')
+        mP = mP+P;
+    else
+        mP = P;
+    end
+end
+
+mP = mP/count;
+
+figure();
+h = pcolor(1e2*x,1e2*y,mP/1e3);
+set(h,'EdgeColor','none');
+shading interp;
+c = colorbar();
+c.Label.String = 'Mean Pressure, P [kPa]';
+xlabel('Position, x [cm]');
+ylabel('Position, y [cm]');
+axis square;

@@ -1,0 +1,40 @@
+% clean up workspace
+clear;
+clc;
+close all;
+
+% create object from file
+S = PressureSamples('pressure.xlsx');
+% resample data into standardized space
+[x,y,P,uP] = S.resampleData();
+
+% compute weight on pad
+% integral boundaries can be treated simply because of zero value
+dx = x(2)-x(1);
+dy = y(2)-y(1);
+W = sum(sum(P*dx*dy));
+% compute mass equivalent
+g = 9.81;
+m = W/g;
+
+% plot pressure distribution
+figure();
+h = pcolor(1e2*x,1e2*y,P'/1e3);
+set(h,'EdgeColor','none');
+shading interp;
+c = colorbar();
+c.Label.String = 'Pressure, P [kPa]';
+xlabel('Position, x [cm]');
+ylabel('Position, y [cm]');
+axis square;
+
+% plot pressure uncertainty
+figure();
+h = pcolor(1e2*x,1e2*y,uP'/1e3);
+set(h,'EdgeColor','none');
+shading interp;
+c = colorbar();
+c.Label.String = 'Pressure Uncertainty, u_P [kPa]';
+xlabel('Position, x [cm]');
+ylabel('Position, y [cm]');
+axis square;
